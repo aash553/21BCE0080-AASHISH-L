@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess-like Game</title>
+  <style>
+    .board {
+      display: grid;
+      grid-template-columns: repeat(5, 50px);
+      grid-template-rows: repeat(5, 50px);
+    }
+
+    .cell {
+      width: 50px;
+      height: 50px;
+      border: 1px solid black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+    }
+
+    .highlight {
+      background-color: yellow;
+    }
+
+    #joinGameForm {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chess-like Game</h1>
+  <div id="gameStatus"></div>
+  <div class="board" id="board" style="display: none;"></div>
+
+  <div id="joinGameForm">
+    <button id="createGameButton">Create Game</button>
+    <input type="text" id="gameIdInput" placeholder="Enter Game ID">
+    <button id="joinGameButton">Join Game</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let gameId;
+    let selectedPosition = null;
+
+    // Create a new game
+    document.getElementById('createGameButton').addEventListener('click', () => {
+      socket.emit('createGame');
+    });
+
+    // Join an existing game
+    document.getElementById('joinGameButton').addEventListener('click', () => {
+      gameId = document.getElementById('gameIdInput').value;
+      if (gameId) {
+        socket.emit('joinGame', gameId);
+      } else {
+        alert('Please enter a game ID.');
+      }
+    });
+
+    socket.on('gameCreated', (id) => {
+      gameId = id;
+      document.getElementById('gameStatus').textContent = `Game Created. ID: ${gameId}. Waiting for opponent...`;
+    });
+
+    socket.on('gameStarted', (game) => {
+      document.getElementById('gameStatus').textContent = 'Game Started!';
+      document.getElementById('board').style.display = 'grid';
+      renderBoard(game.board);
+    });
+
+    socket.on('gameUpdate', (game) => {
+      renderBoard(game.board);
+    });
+
+    socket.on('validMoves', (validMoves) => {
+      validMoves.forEach(([x, y]) => {
+        const cell = document.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+        if (cell) {
+          cell.classList.add('highlight');
+        }
+      });
+    });
+
+    function renderBoard(board) {
+      const boardElement = document.getElementById('board');
+      boardElement.innerHTML = '';
+      for (let y = 0; y < board.length; y++) {
+        for (let x = 0; x < board[y].length; x++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.textContent = board[y][x];
+          cell.dataset.x = x;
+          cell.dataset.y = y;
+
+          cell.addEventListener('click', () => {
+            if (selectedPosition) {
+              socket.emit('move', {
+                gameId,
+                from: selectedPosition,
+                to: [x, y]
+              });
+              selectedPosition = null;
+            } else {
+              selectedPosition = [x, y];
+              socket.emit('requestValidMoves', {
+                gameId,
+                position: selectedPosition
+              });
+            }
+          });
+
+          boardElement.appendChild(cell);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
